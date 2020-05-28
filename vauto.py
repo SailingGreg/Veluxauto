@@ -9,6 +9,8 @@ import time
 
 # needed for html requests
 import requests
+#import reqdump
+from requests_toolbelt.utils import dump
 import json
 import datetime
 from datetime import date
@@ -30,11 +32,17 @@ def removeNonAscii(s):
 def loadWeather():
 
     try:
-        req = requests.get(weewxurl)
+        req = requests.get(weewxurl )
     except Exception as e:
         print ("Error on request")
 
-    return (req.json)
+    #data = dump.dump_all(req)
+    #print(data.decode('utf-8'))
+
+    #print(req.request.body)
+    #print(req.request.headers)
+
+    return (req.json())
 
 # end loadWeather
 
@@ -46,7 +54,19 @@ while (True):
 
     weather = loadWeather()
 
-    print (weather)
+    #print (weather)
+
+    print (weather['title'], weather['time'])
+    # extract the inside and outside temperatures
+    outTemp = weather['stats']['current']['outTemp']
+    inTemp = weather['stats']['current']['insideTemp']
+
+    # convert the encode strings
+    cinTemp = BeautifulSoup(inTemp, "lxml").text
+    coutTemp = BeautifulSoup(outTemp, "lxml").text
+    print ("inside temp", float(cinTemp[0:-2]))
+    print ("outside temp", float (coutTemp[0:-2]))
+
 
     time.sleep (10)
 
