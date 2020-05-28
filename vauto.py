@@ -9,7 +9,7 @@ import time
 
 # needed for html requests
 import requests
-#import reqdump
+# following only needed for debug, for example iffy json!
 from requests_toolbelt.utils import dump
 import json
 import datetime
@@ -19,6 +19,12 @@ from dateutil import parser
 #import pyowm # wraps open weather apis
 from lxml import html
 from bs4 import BeautifulSoup
+
+FIVEMINS = 300 # 5 mins
+TRUE = 1
+FALSE = 0
+OPEN = True
+CLOSED = False
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,16 +45,15 @@ def loadWeather():
     #data = dump.dump_all(req)
     #print(data.decode('utf-8'))
 
-    #print(req.request.body)
-    #print(req.request.headers)
-
     return (req.json())
-
 # end loadWeather
 
 
+# main processing loop
 
-# main
+# the starting state
+windowState = CLOSED
+Operating = True
 
 while (True):
 
@@ -58,17 +63,31 @@ while (True):
 
     print (weather['title'], weather['time'])
     # extract the inside and outside temperatures
-    outTemp = weather['stats']['current']['outTemp']
-    inTemp = weather['stats']['current']['insideTemp']
+    toutTemp = weather['stats']['current']['outTemp']
+    tinTemp = weather['stats']['current']['insideTemp']
 
     # convert the encode strings
-    cinTemp = BeautifulSoup(inTemp, "lxml").text
-    coutTemp = BeautifulSoup(outTemp, "lxml").text
-    print ("inside temp", float(cinTemp[0:-2]))
-    print ("outside temp", float (coutTemp[0:-2]))
+    inTemp = float(BeautifulSoup(tinTemp, "lxml").text[0:-2])
+    outTemp = float(BeautifulSoup(toutTemp, "lxml").text[0:-2])
+    print ("inside/outside temp", inTemp, outTemp)
 
+    # if it is later in the day and temperature outside is less than
+    # inside temperature open the window
+
+    # check operating window - this sets time constraints
+
+    # add time check and flag if 'operating'
+    if (Operating == True and outTemp < (inTemp - 1.5)):
+        if (windowState != OPEN):
+            print ("Windowing open")
+            windowState = OPEN
+    else:
+        if (windowState != CLOSED): # it should be
+            print ("Closing window")
+            windowState = CLOSED
 
     time.sleep (10)
+    #time.sleep (FIVEMINS)
 
 # end while
 
