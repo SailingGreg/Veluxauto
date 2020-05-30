@@ -1,5 +1,6 @@
 #
-# Velus automation code
+# Velux automation code - controls the main skylight
+# based on the temperature difference and time of day
 #
 #
 
@@ -35,7 +36,7 @@ def removeNonAscii(s):
     return "".join(i for i in s if (ord(i)<128 and ord(i)>31))
 
 
-# load the weather date from WeeWx
+# load the weather data from WeeWx - provides temperatures
 oldreq = 0
 def loadWeather():
 
@@ -55,12 +56,9 @@ def loadWeather():
 
 # main processing loop
 
+# create and reset the relays
 relay1 = PiRelay.Relay("RELAY1")
 relay2 = PiRelay.Relay("RELAY2")
-
-# and reset the relays - no need to do this as the class resets on creation
-#relay1.off()
-#relay2.off()
 
 # the starting state
 windowState = CLOSED

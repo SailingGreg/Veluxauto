@@ -12,9 +12,9 @@ After=multi-user.target
 [Service]
 Type=idle
 
-ExecStart=/usr/bin/python3 /home/pi/Vexluauto/vauto.py
-StandardOutput=file:/home/pi/Vexluauto/vauto.log
-StandardError=file:/home/pi/Vexluauto/vauto.err
+ExecStart=/usr/bin/python3 /home/pi/Veluxauto/vauto.py
+StandardOutput=file:/home/pi/Veluxauto/vauto.log
+StandardError=file:/home/pi/Veluxauto/vauto.err
 
 [Install]
 WantedBy=multi-user.target
