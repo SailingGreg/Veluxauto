@@ -1,0 +1,20 @@
+# 
+# vauto server systemd service configuration file
+# install to /lib/systemd/system/vauto.service
+# then systemctl daemon-reload
+# & then systemctl enable vauto.service
+# & then systemctl enable start vauto.service
+
+[Unit]
+Description=Velux Automation Server
+After=multi-user.target
+
+[Service]
+Type=idle
+
+ExecStart=/usr/bin/python3 /home/pi/Vexluauto/vauto.py
+StandardOutput=file:/home/pi/Vexluauto/vauto.log
+StandardError=file:/home/pi/Vexluauto/vauto.err
+
+[Install]
+WantedBy=multi-user.target
