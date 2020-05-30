@@ -1,16 +1,17 @@
 #
-#
+# Velus automation code
 #
 #
 
 # standard imports
 import logging
 import time
+import PiRelay
 
 # needed for html requests
 import requests
 # following only needed for debug, for example iffy json!
-from requests_toolbelt.utils import dump
+#from requests_toolbelt.utils import dump
 import json
 import datetime
 from datetime import date
@@ -35,12 +36,15 @@ def removeNonAscii(s):
 
 
 # load the weather date from WeeWx
+oldreq = 0
 def loadWeather():
 
     try:
         req = requests.get(weewxurl )
+        oldreq = req # save state
     except Exception as e:
         print ("Error on request")
+        req = oldreq
 
     #data = dump.dump_all(req)
     #print(data.decode('utf-8'))
@@ -50,6 +54,13 @@ def loadWeather():
 
 
 # main processing loop
+
+relay1 = PiRelay.Relay("RELAY1")
+relay2 = PiRelay.Relay("RELAY2")
+
+# and reset the relays - no need to do this as the class resets on creation
+#relay1.off()
+#relay2.off()
 
 # the starting state
 windowState = CLOSED
@@ -77,17 +88,25 @@ while (True):
     # check operating window - this sets time constraints
 
     # add time check and flag if 'operating'
-    if (Operating == True and outTemp < (inTemp - 1.5)):
+    if (Operating == True \
+			and outTemp < 22 \
+			and outTemp < (inTemp - 1.5)):
         if (windowState != OPEN):
             print ("Windowing open")
+            relay1.on()
+            time.sleep(0.5)
+            relay1.off()
             windowState = OPEN
     else:
         if (windowState != CLOSED): # it should be
             print ("Closing window")
+            relay2.on()
+            time.sleep(0.5)
+            relay2.off()
             windowState = CLOSED
 
-    time.sleep (10)
-    #time.sleep (FIVEMINS)
+    #time.sleep (10)
+    time.sleep (FIVEMINS)
 
 # end while
 
