@@ -100,6 +100,8 @@ sensor = initSensor()
 windowState = CLOSED
 Operating = True
 inTemp = 20.0 # starting point so defined on first loop
+highTemp = 22.2 # the temperate at which the skylight should open
+lowTemp = 21.8 # the temperate at which the skylight should close
 
 while (True):
 
@@ -122,7 +124,8 @@ while (True):
     #inTemp = float(BeautifulSoup(tinTemp, "lxml").text[0:-2])
     outTemp = float(BeautifulSoup(toutTemp, "lxml").text[0:-2])
     #logging.info ("inside/outside temp: ", str(inTemp), str(outTemp))
-    logging.info ("inside/outside temp: " + str(inTemp) + " " + str(outTemp))
+    tempStr = "inside/outside temp: " + str(inTemp) + " " + str(outTemp)
+    logging.info (tempStr)
 
     # if it is later in the day and temperature outside is less than
     # inside temperature open the window
@@ -133,22 +136,25 @@ while (True):
     # we need the outside temperature to be pleasant and for it
     # to be a degree or two lower that the inside temperature
     # and for the inside temperature not to drop below 22
+    #
     # - add some hysteresis so it doesn't go up and down! - add timer
     if (Operating == True \
 			and outTemp <= 22 \
 			and outTemp < (inTemp - 1.5) \
-			and inTemp >= 22):
+			and inTemp >= highTemp):
         if (windowState != OPEN):
             logging.info ("Windowing opening")
-            logAction (str(weather['time']) + " Windowing opening")
+            logAction (str(weather['time']) + " " + \
+					tempStr + " Windowing opening")
             relay1.on()
             time.sleep(0.5)
             relay1.off()
             windowState = OPEN
     else:
-        if (windowState != CLOSED): # it should be
+        if (windowState != CLOSED and (inTemp <= lowTemp or outTemp > 22)):
             logging.info ("Window closing")
-            logAction (str(weather['time']) + " Windowing closing")
+            logAction (str(weather['time']) + " " + \
+					tempStr + " Windowing closing")
             relay2.on()
             time.sleep(0.5)
             relay2.off()
