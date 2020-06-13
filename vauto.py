@@ -96,12 +96,15 @@ def initSensor():
 # create and reset the relays
 relay1 = PiRelay.Relay("RELAY1")
 relay2 = PiRelay.Relay("RELAY2")
+relay3 = PiRelay.Relay("RELAY3")
+relay4 = PiRelay.Relay("RELAY4")
 
 sensor = initSensor() # env sensor
 logger = logAction(loc) # local logger
 
 # the starting state
 windowState = CLOSED
+blindState = OPEN
 Operating = True
 inTemp = 20.0 # starting point so defined on first loop
 highTemp = 22.2 # the temperate at which the skylight should open
@@ -164,6 +167,26 @@ while (True):
             relay2.off()
             #closedTime = time()
             windowState = CLOSED
+
+    # if it is getting too warm outside close the blind
+    if (Operating is True and outTemp > highTemp):
+       if (blindState != CLOSED):
+            logging.info("Blind closing")
+            logger.log(str(weather['time']) + " " +
+                                            tempStr + " Blind closing")
+            relay4.on()
+            time.sleep(0.5)
+            relay4.off()
+            blindState = CLOSED
+    else:
+        if (blindState == CLOSED and (outTemp < lowTemp)):
+            logging.info("Blind opening")
+            logger.log(str(weather['time']) + " " +
+                                            tempStr + " Blind opening")
+            relay3.on()
+            time.sleep(0.5)
+            relay3.off()
+            blindState = OPEN
 
     #time.sleep(10)
     # we wait 5 mins as this is the update freq for weewx
