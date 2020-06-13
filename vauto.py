@@ -13,13 +13,13 @@ import bme680 # for the environment sensor
 # needed for html requests
 import requests
 # following only needed for debug, for example iffy json!
-#from requests_toolbelt.utils import dump
+# from requests_toolbelt.utils import dump
 import json
 import datetime
 from datetime import date
 import dateutil.relativedelta
 from dateutil import parser
-#import pyowm # wraps open weather apis
+# import pyowm # wraps open weather apis
 from lxml import html
 from bs4 import BeautifulSoup
 
@@ -34,37 +34,40 @@ logging.basicConfig(level=logging.INFO)
 weewxurl = "http://pihmwstn/daily.json"
 loc = "/home/pi/Veluxauto/" # absolute path for the source directory
 
+
 def removeNonAscii(s):
     return "".join(i for i in s if (ord(i)<128 and ord(i)>31))
 
-
 # load the weather data from WeeWx - provides temperatures
 oldreq = 0
+
+
 def loadWeather():
 
     try:
-        req = requests.get(weewxurl )
+        req = requests.get(weewxurl)
         oldreq = req # save state
     except Exception as e:
-        print ("Error on request")
+        print("Error on request")
         req = oldreq
 
-    #data = dump.dump_all(req)
-    #print(data.decode('utf-8'))
+    # data = dump.dump_all(req)
+    # print(data.decode('utf-8'))
 
     return (req.json())
 # end loadWeather
 
-fd = None
-def logAction(action):
-    global fd
+# def for class
+class logAction:
 
-    if (fd is None):
-        fd = open(loc + 'vauto.actions', 'a+', 1) # line buffering
+    def __init__(self, loc):
+        self.fd = open(loc + 'vauto.actions', 'a+', 1) # line buffering
 
-    # need to add timestamp
-    fd.write(action + "\n")
-# end logAction
+    def log(self, action):
+        self.fd.write(action + "\n")
+
+# end logAction class
+
 
 def initSensor():
     sensor = bme680.BME680() # sensor object
@@ -81,7 +84,7 @@ def initSensor():
     sensor.select_gas_heater_profile(0)
 
     sensor.set_temp_offset(-2.5)
-    #sensor.set_temp_offset(-3)
+    # sensor.set_temp_offset(-3)
 
     return sensor
 # end initSensor
@@ -94,7 +97,8 @@ def initSensor():
 relay1 = PiRelay.Relay("RELAY1")
 relay2 = PiRelay.Relay("RELAY2")
 
-sensor = initSensor()
+sensor = initSensor() # env sensor
+logger = logAction(loc) # local logger
 
 # the starting state
 windowState = CLOSED
@@ -107,25 +111,25 @@ while (True):
 
     weather = loadWeather()
 
-    #print (weather)
+    # print(weather)
 
-    time.sleep (2)
+    time.sleep(2)
     if sensor.get_sensor_data():
         inTemp = sensor.data.temperature
         # sensor.data.temperature, sensor.data.pressure, sensor.data.humidity
 
-    logging.info (str(weather['title']) + " " + str(weather['time']))
-    #logging.info (str(weather['title']), str(weather['time']))
+    logging.info(str(weather['title']) + " " + str(weather['time']))
+    # logging.info(str(weather['title']), str(weather['time']))
     # extract the inside and outside temperatures
     toutTemp = weather['stats']['current']['outTemp']
     tinTemp = weather['stats']['current']['insideTemp']
 
     # convert the encode strings
-    #inTemp = float(BeautifulSoup(tinTemp, "lxml").text[0:-2])
+    # inTemp = float(BeautifulSoup(tinTemp, "lxml").text[0:-2])
     outTemp = float(BeautifulSoup(toutTemp, "lxml").text[0:-2])
-    #logging.info ("inside/outside temp: ", str(inTemp), str(outTemp))
+    # logging.info ("inside/outside temp: ", str(inTemp), str(outTemp))
     tempStr = "inside/outside temp: " + str(inTemp) + " " + str(outTemp)
-    logging.info (tempStr)
+    logging.info(tempStr)
 
     # if it is later in the day and temperature outside is less than
     # inside temperature open the window
@@ -138,32 +142,32 @@ while (True):
     # and for the inside temperature not to drop below 22
     #
     # - add some hysteresis so it doesn't go up and down! - add timer
-    if (Operating == True \
-			and outTemp <= 22 \
-			and outTemp < (inTemp - 1.5) \
-			and inTemp >= highTemp):
+    if (Operating is True
+                          and outTemp <= 22
+                          and outTemp < (inTemp - 1.5)
+                          and inTemp >= highTemp):
         if (windowState != OPEN):
-            logging.info ("Windowing opening")
-            logAction (str(weather['time']) + " " + \
-					tempStr + " Windowing opening")
+            logging.info("Windowing opening")
+            logger.log(str(weather['time']) + " " +
+                                            tempStr + " Windowing opening")
             relay1.on()
             time.sleep(0.5)
             relay1.off()
             windowState = OPEN
     else:
         if (windowState != CLOSED and (inTemp <= lowTemp or outTemp > 22)):
-            logging.info ("Window closing")
-            logAction (str(weather['time']) + " " + \
-					tempStr + " Windowing closing")
+            logging.info("Window closing")
+            logger.log(str(weather['time']) + " " +
+                                            tempStr + " Windowing closing")
             relay2.on()
             time.sleep(0.5)
             relay2.off()
             #closedTime = time()
             windowState = CLOSED
 
-    #time.sleep (10)
+    #time.sleep(10)
     # we wait 5 mins as this is the update freq for weewx
-    time.sleep (FIVEMINS)
+    time.sleep(FIVEMINS)
 
 # end while
 
