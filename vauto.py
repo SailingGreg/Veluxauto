@@ -2,6 +2,8 @@
 # Velux automation code - controls the main skylight
 # based on the temperature difference and time of day
 #
+# note the oeld structure is based on the waveshare code
+# and therefore the drivers are installed local
 #
 
 # standard imports
@@ -23,6 +25,29 @@ from dateutil import parser
 from lxml import html
 from bs4 import BeautifulSoup
 
+loc = "/home/pi/Veluxauto/" # absolute path for the source directory
+# import the SPI & SSD1305 drivers
+import sys
+sys.path.append(loc + 'drive')
+#sys.path.append('./drive')
+import SPI
+import SSD1305
+
+# and the draw modules
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+
+# Raspberry Pi pin configuration:
+RST = None     # on the PiOLED this pin isnt used
+# Note the following are only used with SPI:
+DC = 24
+SPI_PORT = 0
+SPI_DEVICE = 0
+
+# 128x32 display with hardware SPI:
+disp = SSD1305.SSD1305_128_32(rst=RST, dc=DC, spi=SPI.SpiDev(SPI_PORT, SPI_DEVICE, max_speed_hz=8000000))
+
 FIVEMINS = 300 # 5 mins
 TRUE = 1
 FALSE = 0
@@ -32,17 +57,15 @@ CLOSED = False
 logging.basicConfig(level=logging.INFO)
 
 weewxurl = "http://pihmwstn/daily.json"
-loc = "/home/pi/Veluxauto/" # absolute path for the source directory
 
 
 def removeNonAscii(s):
     return "".join(i for i in s if (ord(i)<128 and ord(i)>31))
 
 # load the weather data from WeeWx - provides temperatures
-oldreq = 0
-
-
+oldreq = []
 def loadWeather():
+    global oldreq
 
     try:
         req = requests.get(weewxurl)
@@ -93,6 +116,7 @@ def initSensor():
 # main processing loop
 #
 
+
 # create and reset the relays
 relay1 = PiRelay.Relay("RELAY1")
 relay2 = PiRelay.Relay("RELAY2")
@@ -101,6 +125,28 @@ relay4 = PiRelay.Relay("RELAY4")
 
 sensor = initSensor() # env sensor
 logger = logAction(loc) # local logger
+
+# Initialize library.
+disp.begin()
+
+# Clear display.
+disp.clear()
+disp.display()
+
+# Create blank image for drawing.
+# Make sure to create image with mode '1' for 1-bit color.
+width = disp.width
+#width = 128
+height = disp.height
+#height = 32
+image = Image.new('1', (width, height))
+# Get drawing object to draw on image.
+draw = ImageDraw.Draw(image)
+
+# load the font file & different sizes
+lfont = ImageFont.truetype(loc + '04B_08__.TTF',10)
+font = ImageFont.truetype(loc + '04B_08__.TTF',8)
+sfont = ImageFont.truetype(loc + '04B_08__.TTF',6)
 
 # the starting state
 windowState = CLOSED
@@ -134,6 +180,22 @@ while (True):
     tempStr = "inside/outside temp: " + str(inTemp) + " " + str(outTemp)
     logging.info(tempStr)
 
+    # Draw a black filled box to clear the image.
+    draw.rectangle((0,0,width,height), outline=0, fill=0)
+
+    top = 0 # row
+    x = 0 # column
+    # Write two lines of text.
+    draw.text((x, top),     "Temperatures: ", font=font, fill=255)
+    draw.text((x, top+8),   "Inside: " + str(inTemp), font=font, fill=255)
+    draw.text((x, top+16),  "Outside: " + str(outTemp),  font=font, fill=255)
+    #draw.text((x, top+25), str(Disk),  font=font, fill=255)
+
+    # Display image.
+    disp.image(image)
+    disp.display()
+    #time.sleep(.1)
+
     # if it is later in the day and temperature outside is less than
     # inside temperature open the window
 
@@ -145,8 +207,7 @@ while (True):
     # and for the inside temperature not to drop below 22
     #
     # - add some hysteresis so it doesn't go up and down! - add timer
-    if (Operating is True
-                          and outTemp <= 22
+    if (Operating is True and outTemp <= 22
                           and outTemp < (inTemp - 1.5)
                           and inTemp >= highTemp):
         if (windowState != OPEN):
@@ -169,7 +230,7 @@ while (True):
             windowState = CLOSED
 
     # if it is getting too warm outside close the blind
-    if (Operating is True and outTemp > highTemp):
+    if (Operating is True and outTemp > highTemp + 1.0):
        if (blindState != CLOSED):
             logging.info("Blind closing")
             logger.log(str(weather['time']) + " " +
@@ -179,7 +240,7 @@ while (True):
             relay4.off()
             blindState = CLOSED
     else:
-        if (blindState == CLOSED and (outTemp < lowTemp)):
+        if (blindState == CLOSED and (outTemp < lowTemp + 1.0)):
             logging.info("Blind opening")
             logger.log(str(weather['time']) + " " +
                                             tempStr + " Blind opening")

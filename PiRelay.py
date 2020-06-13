@@ -9,8 +9,9 @@
 import RPi.GPIO as GPIO
 import time
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+#GPIO.setmode(GPIO.BOARD)
+#GPIO.setwarnings(False)
 
 class Relay:
     ''' Class to handle Relay
@@ -18,7 +19,11 @@ class Relay:
     Arguments:
     relay = string Relay label (i.e. "RELAY1","RELAY2","RELAY3","RELAY4")
     '''
-    relaypins = {"RELAY1":31, "RELAY2":33, "RELAY3":35, "RELAY4":37}
+
+    # following are GPIO.BOARD and GPIO.BCM mappings
+    #relaypins = {"RELAY1":31, "RELAY2":33, "RELAY3":35, "RELAY4":37}
+    # following are GPIO.BCM mappings
+    relaypins = {"RELAY1":6, "RELAY2":13, "RELAY3":19, "RELAY4":26}
 
 
     def __init__(self, relay):
