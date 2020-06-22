@@ -11,6 +11,13 @@ import logging
 import time
 import PiRelay
 import bme680 # for the environment sensor
+from slack_webhook import Slack
+
+from pysolar.solar import *
+import pytz
+#import datetime
+
+from creds import *
 
 # needed for html requests
 import requests
@@ -24,6 +31,10 @@ from dateutil import parser
 # import pyowm # wraps open weather apis
 from lxml import html
 from bs4 import BeautifulSoup
+
+# location
+lat = 51.464
+log = -0.231
 
 loc = "/home/pi/Veluxauto/" # absolute path for the source directory
 # import the SPI & SSD1305 drivers
@@ -57,7 +68,6 @@ CLOSED = False
 logging.basicConfig(level=logging.INFO)
 
 weewxurl = "http://pihmwstn/daily.json"
-
 
 def removeNonAscii(s):
     return "".join(i for i in s if (ord(i)<128 and ord(i)>31))
@@ -106,8 +116,11 @@ def initSensor():
     sensor.set_gas_heater_duration(150)
     sensor.select_gas_heater_profile(0)
 
-    sensor.set_temp_offset(-2.5)
-    # sensor.set_temp_offset(-3)
+    # offset of the order of 3 seems realistic
+    # can only do this by observation and comparing
+    #sensor.set_temp_offset(-2.5)
+    #sensor.set_temp_offset(-3.0)
+    sensor.set_temp_offset(-3.2)
 
     return sensor
 # end initSensor
@@ -125,6 +138,8 @@ relay4 = PiRelay.Relay("RELAY4")
 
 sensor = initSensor() # env sensor
 logger = logAction(loc) # local logger
+# note: slackHook imported from creds.py
+slack = Slack(url = slackHook)
 
 # Initialize library.
 disp.begin()
@@ -148,6 +163,7 @@ lfont = ImageFont.truetype(loc + '04B_08__.TTF',10)
 font = ImageFont.truetype(loc + '04B_08__.TTF',8)
 sfont = ImageFont.truetype(loc + '04B_08__.TTF',6)
 
+
 # the starting state
 windowState = CLOSED
 blindState = OPEN
@@ -157,6 +173,18 @@ highTemp = 22.2 # the temperate at which the skylight should open
 lowTemp = 21.8 # the temperate at which the skylight should close
 
 while (True):
+
+    # get a tz version of now()
+    d = datetime.datetime.now()
+    #print (d.tzinfo)
+    timezone = pytz.timezone("Europe/London")
+    date = timezone.localize(d)
+
+    # get the sun's position
+
+    alt_degree = get_altitude(lat, log, date)
+    azi_degree = get_azimuth(lat, log, date)
+    rad_amnt = radiation.get_radiation_direct(date, alt_degree)
 
     weather = loadWeather()
 
@@ -173,11 +201,18 @@ while (True):
     toutTemp = weather['stats']['current']['outTemp']
     tinTemp = weather['stats']['current']['insideTemp']
 
+    # extract sunrise/sunset - note strings so need to convert to time
+    sunrise = weather['almanac']['sun']['sunrise']
+    sunset = weather['almanac']['sun']['sunset']
+
     # convert the encode strings
     # inTemp = float(BeautifulSoup(tinTemp, "lxml").text[0:-2])
     outTemp = float(BeautifulSoup(toutTemp, "lxml").text[0:-2])
     # logging.info ("inside/outside temp: ", str(inTemp), str(outTemp))
-    tempStr = "inside/outside temp: " + str(inTemp) + " " + str(outTemp)
+    #tempStr = "inside/outside temp: " + str(inTemp) + " " + str(outTemp)
+    tempStr = "inside/outside temp: {}, {} - {:6.2f} {:6.2f} {:6.2f}".format(inTemp, 
+				outTemp, alt_degree, azi_degree, rad_amnt)
+
     logging.info(tempStr)
 
     # Draw a black filled box to clear the image.
@@ -214,14 +249,18 @@ while (True):
             logging.info("Windowing opening")
             logger.log(str(weather['time']) + " " +
                                             tempStr + " Windowing opening")
+            slack.post(text = str(weather['time']) + " " +
+                                            tempStr + " Windowing opening")
             relay1.on()
             time.sleep(0.5)
             relay1.off()
             windowState = OPEN
     else:
-        if (windowState != CLOSED and (inTemp <= lowTemp or outTemp > 22)):
+        if (windowState != CLOSED and (inTemp <= lowTemp or outTemp > 22.5)):
             logging.info("Window closing")
             logger.log(str(weather['time']) + " " +
+                                            tempStr + " Windowing closing")
+            slack.post(text = str(weather['time']) + " " +
                                             tempStr + " Windowing closing")
             relay2.on()
             time.sleep(0.5)
@@ -229,20 +268,25 @@ while (True):
             #closedTime = time()
             windowState = CLOSED
 
+    blindOffset = 3.5
     # if it is getting too warm outside close the blind
-    if (Operating is True and outTemp > highTemp + 1.0):
+    if (Operating is True and outTemp > highTemp + blindOffset):
        if (blindState != CLOSED):
             logging.info("Blind closing")
             logger.log(str(weather['time']) + " " +
+                                            tempStr + " Blind closing")
+            slack.post(text = str(weather['time']) + " " +
                                             tempStr + " Blind closing")
             relay4.on()
             time.sleep(0.5)
             relay4.off()
             blindState = CLOSED
     else:
-        if (blindState == CLOSED and (outTemp < lowTemp + 1.0)):
+        if (blindState == CLOSED and (outTemp < lowTemp + blindOffset)):
             logging.info("Blind opening")
             logger.log(str(weather['time']) + " " +
+                                            tempStr + " Blind opening")
+            slack.post(text = str(weather['time']) + " " +
                                             tempStr + " Blind opening")
             relay3.on()
             time.sleep(0.5)
