@@ -1,4 +1,7 @@
 #
+# this code uses the mosquitto libs to integrate ESP32 sensors via MQTT
+# it is experimental but the intention is to make this the default
+# sensor mechanism to address the bluetooth integration issues
 #
 #
 
