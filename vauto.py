@@ -345,8 +345,11 @@ while (True):
     if (outTemp >= inTemp):
         if (notFlagged is True):
             notFlagged = False
-            slack.post(text = str(weather['time']) + " " +
+            try:
+                slack.post(text = str(weather['time']) + " " +
 			    tempStr + " Outside temp greater than inside")
+            except Exception as e:
+                print("Error on slack post")
     else:
         if (outTemp < inTemp - 1.0): # stop the ping pong
             notFlagged = True
@@ -361,8 +364,8 @@ while (True):
     timeDelay = 30 * 60 # 30mins
 
     # change to use avgTemp for outTemp
-    if (Operating is True and avgTemp <= 26
-                          and avgTemp < (inTemp - 0.5)
+    # removed the <= 26 guard for the moement - using avg now
+    if (Operating is True and avgTemp < (inTemp - 0.5)
                           and inTemp >= highTemp):
         if (windowState != OPEN and (time.time() > stateChg + timeDelay)):
             stateChg = time.time()
@@ -395,7 +398,9 @@ while (True):
     # note BlinOp indicate is there is daylight and sun is visible
     # if it is getting too warm outside close the blind
     #if (BlindOp is True and outTemp > highTemp + blindOffset):
-    if (BlindOp is True and avgTemp > highTemp + blindOffset):
+    # also check that the open is closed!
+    if (BlindOp is True and windowState != OPEN
+			and avgTemp > highTemp + blindOffset):
        if (blindState != CLOSED):
             logging.info("Blind closing")
             logger.log(str(weather['time']) + " " +
