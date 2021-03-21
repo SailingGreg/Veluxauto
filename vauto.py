@@ -325,6 +325,9 @@ while (True):
         x = 0 # column
         # Write two lines of text.
         draw.text((x, top),     "Temperatures: ", font=font, fill=255)
+        # add date to the display
+        draw.text((x + 64, top), str(weather['time']), font=font, fill=255)
+        # logging.info(str(weather['title']) + " " + str(weather['time']))
         draw.text((x, top+8),   "Inside: " + str(inTemp), font=font, fill=255)
         draw.text((x, top+16),  "Outside: " + str(outTemp),  font=font, fill=255)
         wstate = "open " if windowState is OPEN else "closed "
