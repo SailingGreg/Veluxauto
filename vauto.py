@@ -21,8 +21,8 @@ import pytz
 
 from creds import *
 
-# needed for html requests
-import requests
+import socket # needed for address lookup
+import requests # needed for html requests
 # following only needed for debug, for example iffy json!
 # from requests_toolbelt.utils import dump
 import json
@@ -72,6 +72,8 @@ TRUE = 1
 FALSE = 0
 OPEN = True
 CLOSED = False
+tempChg = 0 # used to track change over a time period
+loopCnt = 0
 
 insideTag = 'F9:9F:A4:F9:4B:95'
 outsideTag = 'F1:79:2B:A2:2A:07'
@@ -92,6 +94,16 @@ weewxurl = "http://pihmwstn.local/daily.json"
 def removeNonAscii(s):
     return "".join(i for i in s if (ord(i)<128 and ord(i)>31))
 
+
+# resolve address so it can be 'cached' for requests
+def get_ipv4_by_hostname(target, port=None):
+
+    if not port:
+        port = 80;
+
+    return list(map(lambda x: x[4][0], socket.getaddrinfo('{}.'.format(target),port,type=socket.SOCK_STREAM)))
+
+
 # load the weather data from WeeWx - provides temperatures
 oldreq = []
 def loadWeather():
@@ -101,7 +113,10 @@ def loadWeather():
         req = requests.get(weewxurl)
         oldreq = req # save state
     except Exception as e:
-        print("Error on request")
+        dnow = dt.datetime.now()
+        day = dt.datetime.strftime(dnow, '%Y-%m-%d %H:%M:%S')
+
+        print("Error on request", day, e)
         req = oldreq
 
     # data = dump.dump_all(req)
@@ -146,19 +161,28 @@ def initSensor():
 # end initSensor
 
 counter = 3
+prevTemp = 0.0
 #Ruuvitag listener
 def ruuviListen():
 
     def handle_data(found_data):
         global tags
         global counter
+        global tempChg
+        global prevTemp
 
-
+        # could be insideTag or outsideTag or another
         mac = found_data[0]
         temp = found_data[1]['temperature']
         # update the tag with the reading
         tags[mac]['temp'] = found_data[1]['temperature']
-        #counter = counter - 1
+
+        # has the inside temp changed?
+        if (prevTemp != tags[insideTag]['temp']): # note change
+            prevTemp = tags[insideTag]['temp']
+            tempChg = tempChg + 1
+
+        #counter = counter - 1 # used for valiation
         #if counter < 0:
             #run_flag.running = False
 
@@ -169,7 +193,7 @@ def ruuviListen():
         #else:
             #print("error - unknown tag ", mac)
 
-    RuuviTagSensor.get_datas(handle_data, None, run_flag)
+    RuuviTagSensor.get_data(handle_data, None, run_flag)
     print("RuuviTagSensor returned")
 # end of parallel threads
 
@@ -224,6 +248,7 @@ t.daemon = True # note that this is not deamon!
 t.start()
 
 # the starting state
+oldTemp = 0.0
 windowState = CLOSED
 blindState = OPEN
 Operating = True
@@ -231,8 +256,12 @@ BlindOp = False
 notFlagged = True
 stateChg = 0.0 # time of last change
 inTemp = 20.0 # starting point so defined on first loop
-highTemp = 22.0 # the temperate at which the skylight should open
-lowTemp = 21.5 # the temperate at which the skylight should close
+# following should be seasonable with higher values at the start/finish
+# and lower values during the warm months of may/jun/jul/aug
+highTemp = 23.0 # the temperate at which the skylight should open
+lowTemp = 22.5 # the temperate at which the skylight should close
+#highTemp = 22.0 # the temperate at which the skylight should open
+#lowTemp = 21.5 # the temperate at which the skylight should close
 
 tempReading = [] # list
 while (True):
@@ -294,7 +323,12 @@ while (True):
 
     # convert the encode strings
     # inTemp = float(BeautifulSoup(tinTemp, "lxml").text[0:-2])
-    outTemp = float(BeautifulSoup(toutTemp, "lxml").text[0:-2])
+    try:
+        outTemp = float(BeautifulSoup(toutTemp, "lxml").text[0:-2])
+        oldTemp = outTemp
+    except Exception as e:
+        outTemp = oldTemp
+        logging.info("Error converting " + toutTemp)
 
     #
     # use 30 min moving average to smooth fluctations
@@ -311,8 +345,8 @@ while (True):
 
     # logging.info ("inside/outside temp: ", str(inTemp), str(outTemp))
     #tempStr = "inside/outside temp: " + str(inTemp) + " " + str(outTemp)
-    tempStr = "inside/outside temp: {}, {}, {:.1f} - {:.2f} {:6.2f} {:6.2f}".format(
-			inTemp, outTemp, avgTemp, alt_degree, azi_degree, rad_amnt)
+    tempStr = "inside/outside temp: {}, {}, {:.1f} - {:.2f} {:6.2f} {:6.2f}, {}".format(
+			inTemp, outTemp, avgTemp, alt_degree, azi_degree, rad_amnt, tempChg)
 
 
     logging.info(tempStr)
@@ -324,11 +358,18 @@ while (True):
         top = 0 # row
         x = 0 # column
         # Write two lines of text.
-        draw.text((x, top),     "Temperatures: ", font=font, fill=255)
+        draw.text((x, top),     "Temperature: ", font=font, fill=255)
         # add date to the display
-        draw.text((x + 64, top), str(weather['time']), font=font, fill=255)
+        draw.text((x + 80, top), str(weather['time']), font=font, fill=255)
         # logging.info(str(weather['title']) + " " + str(weather['time']))
         draw.text((x, top+8),   "Inside: " + str(inTemp), font=font, fill=255)
+
+        # over 6 hours has temp changed?
+        if (tempChg == 0): # no change so flag
+            draw.text((x + 65, top+8), "**", font=font, fill=255)
+        if (loopCnt > 72): # 6 hours
+            loopCnt = 0
+            tempChg = 0
         draw.text((x, top+16),  "Outside: " + str(outTemp),  font=font, fill=255)
         wstate = "open " if windowState is OPEN else "closed "
         bstate = "open" if blindState is OPEN else "closed"
@@ -352,7 +393,9 @@ while (True):
                 slack.post(text = str(weather['time']) + " " +
 			    tempStr + " Outside temp greater than inside")
             except Exception as e:
-                print("Error on slack post")
+                dnow = dt.datetime.now()
+                day = dt.datetime.strftime(dnow, '%Y-%m-%d %H:%M:%S')
+                print("Error on slack post", day, e)
     else:
         if (outTemp < inTemp - 1.0): # stop the ping pong
             notFlagged = True
@@ -364,7 +407,8 @@ while (True):
     # - add some hysteresis so it doesn't go up and down! - add timer
     # - have been agreessive on the 'differences' as the outside read
     #  is a bit high
-    timeDelay = 30 * 60 # 30mins
+    timeDelay = 180 * 60 # 180 mins
+    #timeDelay = 30 * 60 # 30mins
 
     # change to use avgTemp for outTemp
     # removed the <= 26 guard for the moement - using avg now
@@ -428,6 +472,7 @@ while (True):
 
     #time.sleep(10)
     # we wait 5 mins as this is the update freq for weewx
+    loopCnt = loopCnt + 1
     time.sleep(FIVEMINS)
 
 # end while
