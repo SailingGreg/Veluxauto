@@ -272,6 +272,8 @@ while (True):
     #print (dnow.tzinfo)
     timezone = pytz.timezone("Europe/London")
     date = timezone.localize(dnow)
+    # datestr for logging - add to config?
+    datestr = dt.datetime.strftime(date, '%d-%m-%y %H:%M')
 
     # get the sun's position
     alt_degree = get_altitude(lat, log, date)
@@ -292,7 +294,8 @@ while (True):
     #print (">> insideTemp", tags[insideTag]['temp'])
     #print (">> outsideTemp", tags[outsideTag]['temp'])
 
-    logging.info(str(weather['title']) + " " + str(weather['time']))
+    # logs 'Current Values' and time
+    logging.info(datestr + " " + str(weather['title']) + " " + str(weather['time']))
     # logging.info(str(weather['title']), str(weather['time']))
     # extract the inside and outside temperatures
     toutTemp = weather['stats']['current']['outTemp']
