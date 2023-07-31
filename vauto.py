@@ -83,10 +83,13 @@ outsideTag = 'F1:79:2B:A2:2A:07'
 tags = {}
 tags[insideTag] = {}
 tags[insideTag]['temp'] = 0.0
+tags[insideTag]['battery'] = 0
 tags[outsideTag] = {}
 tags[outsideTag]['temp'] = 0.0
+tags[outsideTag]['battery'] = 0
 
-logging.basicConfig(level=logging.INFO)
+# need to add filename = loc + 'vauto.log' to this
+logging.basicConfig(filename = loc + 'vauto.log', level = logging.INFO)
 
 weewxurl = "http://pihmwstn.local/daily.json"
 #weewxurl = "http://pihmwstn/daily.json"
@@ -176,6 +179,7 @@ def ruuviListen():
         temp = found_data[1]['temperature']
         # update the tag with the reading
         tags[mac]['temp'] = found_data[1]['temperature']
+        tags[mac]['battery'] = found_data[1]['battery']
 
         # has the inside temp changed?
         if (prevTemp != tags[insideTag]['temp']): # note change
@@ -262,6 +266,8 @@ highTemp = 23.0 # the temperate at which the skylight should open
 lowTemp = 22.5 # the temperate at which the skylight should close
 #highTemp = 22.0 # the temperate at which the skylight should open
 #lowTemp = 21.5 # the temperate at which the skylight should close
+rainRate = 0.0
+RAINED = False
 
 tempReading = [] # list
 while (True):
@@ -293,6 +299,13 @@ while (True):
     inTemp = tags[insideTag]['temp']
     #print (">> insideTemp", tags[insideTag]['temp'])
     #print (">> outsideTemp", tags[outsideTag]['temp'])
+    
+    # check ruuvi batteries
+    for tag in tags:
+        #print (tag, type(tag), tags[tag])
+        if (tags[tag]['battery'] < 2200): # nominally 2.2v
+            #print("Replace battery for ", tag)
+            logging.error("Replace battery for tag " + tag)
 
     # logs 'Current Values' and time
     logging.info(datestr + " " + str(weather['title']) + " " + str(weather['time']))
@@ -300,6 +313,16 @@ while (True):
     # extract the inside and outside temperatures
     toutTemp = weather['stats']['current']['outTemp']
     tinTemp = weather['stats']['current']['insideTemp']
+
+    # check rain 
+    trainRate = weather['stats']['current']['rainRate'] 
+    rainRate = float(trainRate[0:-5])
+    #print (trainRate, rainRate)
+    if (rainRate > 0.0):
+        # note time and set flag - we update this as we managed the time diff
+        RAINED = True
+        rainTime = dnow.timestamp()
+    # below we check if a couple of hours has passed and then reset
 
     # extract sunrise/sunset - note strings so need to convert to time
     sunrise_str = weather['almanac']['sun']['sunrise']
@@ -443,6 +466,16 @@ while (True):
             relay2.off()
             #closedTime = time.time()
             windowState = CLOSED
+
+    # check for rain and try to reopen the window
+    # the idea is this should happy a few hours after the last rain
+    if (Operating is True and windowState == OPEN and RAINED):
+        # did this happen a couple of hours ago?
+        if (dnow.timestamp() > (rainTime + (3 * 60 * 60))): # open again
+            relay1.on()
+            time.sleep(0.5)
+            relay1.off()
+            RAINED = False
 
     blindOffset = 3.5
     # note BlinOp indicate is there is daylight and sun is visible

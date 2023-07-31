@@ -13,8 +13,8 @@ After=multi-user.target
 Type=idle
 
 ExecStart=/usr/bin/python3 /home/pi/Veluxauto/vauto.py
-StandardOutput=file:/home/pi/Veluxauto/vauto.log
-StandardError=file:/home/pi/Veluxauto/vauto.err
+StandardOutput=file:/home/pi/Veluxauto/vauto.output
+StandardError=file:/home/pi/Veluxauto/vauto.error
 
 [Install]
 WantedBy=multi-user.target
